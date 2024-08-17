@@ -20,15 +20,22 @@ spiral_points = []
 spiral_growth = 0.05
 max_radius = math.sqrt((WIDTH / 2) ** 2 + (HEIGHT / 2) ** 2) * 0.1
 running = True
+current_angle = 0
 clock = pygame.time.Clock()
 font = pygame.font.Font(None, 36)
+astronaut_sprites = [pygame.image.load(f'assets\\images\\astro\\astro-{i}.png') for i in range(1, 6)]
+sprite_scale = 0.1
+astronaut_sprites = [pygame.transform.scale(sprite, (int(sprite.get_width() * sprite_scale), int(sprite.get_height() * sprite_scale))) for sprite in astronaut_sprites]
+current_sprite = 0
+sprite_update_time = 0
+sprite_update_delay = 100
+facing_right = True
 
 def generate_spiral_point(angle):
     radius = math.exp(angle * spiral_growth)
     x = radius * math.cos(angle)
     y = radius * math.sin(angle)
     return [x, y]
-current_angle = 0
 while True:
     point = generate_spiral_point(current_angle)
     if math.hypot(point[0], point[1]) > max_radius:
@@ -91,7 +98,6 @@ def blend_surfaces(surface1, surface2, alpha):
     surface2.set_alpha(int(alpha * 255))
     result.blit(surface2, (0, 0))
     return result
-
 num_backgrounds = 5
 backgrounds = [create_background() for _ in range(num_backgrounds)]
 current_background_index = 0
@@ -106,12 +112,17 @@ while running:
             zoom_factor += event.y * 0.1
             zoom_factor = max(min_zoom, min(max_zoom, zoom_factor))
     keys = pygame.key.get_pressed()
+    moving = False
     if keys[pygame.K_a] and player_angle > 0:
         player_angle -= player_speed
         transition_progress -= transition_speed
+        moving = True
+        facing_right = False
     if keys[pygame.K_d] and player_angle < (len(spiral_points) - 1) * 0.1:
         player_angle += player_speed
         transition_progress += transition_speed
+        moving = True
+        facing_right = True
     if transition_progress >= 1:
         current_background_index = next_background_index
         next_background_index = (next_background_index + 1) % num_backgrounds
@@ -127,7 +138,6 @@ while running:
     current_bg = backgrounds[current_background_index]
     next_bg = backgrounds[next_background_index]
     blended_background = blend_surfaces(current_bg, next_bg, transition_progress)
-
     screen.blit(blended_background, (0, 0))
     if len(spiral_points) > 1:
         adjusted_points = []
@@ -141,9 +151,20 @@ while running:
             adjusted_points.append((screen_x, screen_y))
         pygame.draw.lines(screen, YELLOW, False, adjusted_points, 2)
     player_screen_pos = (WIDTH // 2, HEIGHT // 2)
-    pygame.draw.circle(screen, RED, player_screen_pos, player_radius)
-    line_end = (player_screen_pos[0], player_screen_pos[1] - player_radius)
-    pygame.draw.line(screen, BLACK, player_screen_pos, line_end, 2)
+    if moving:
+        current_time = pygame.time.get_ticks()
+        if current_time - sprite_update_time > sprite_update_delay:
+            current_sprite = (current_sprite + 1) % 5
+            sprite_update_time = current_time
+    else:
+        current_sprite = 0
+    sprite = astronaut_sprites[current_sprite]
+    if not facing_right:
+        sprite = pygame.transform.flip(sprite, True, False)
+    sprite_offset_y = sprite.get_height() // 2 - 12
+    sprite_pos = (player_screen_pos[0], player_screen_pos[1] - sprite_offset_y)
+    sprite_rect = sprite.get_rect(midbottom=sprite_pos)
+    screen.blit(sprite, sprite_rect)
     if player_angle >= (len(spiral_points) - 1) * 0.1:
         win_text = font.render("You've reached the end of the spiral!", True, WHITE)
         screen.blit(win_text, (WIDTH // 2 - win_text.get_width() // 2, HEIGHT // 2))
