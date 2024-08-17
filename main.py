@@ -51,7 +51,6 @@ def get_player_orientation(angle):
     dx = next_point[0] - current_point[0]
     dy = next_point[1] - current_point[1]
     return math.atan2(dy, dx)
-background = pygame.Surface((WIDTH, HEIGHT))
 
 def create_star():
     x = random.randint(0, WIDTH)
@@ -72,16 +71,33 @@ def create_planet():
     radius = random.randint(20, 60)
     color = (random.randint(50, 255), random.randint(50, 255), random.randint(50, 255))
     return (x, y, radius, color)
-stars = [create_star() for _ in range(200)]
-nebulae = [create_nebula() for _ in range(3)]
-planets = [create_planet() for _ in range(5)]
-background.fill(BLACK)
-for nebula in nebulae:
-    pygame.draw.circle(background, nebula[3], (nebula[0], nebula[1]), nebula[2])
-for star in stars:
-    pygame.draw.circle(background, WHITE, (star[0], star[1]), star[2])
-for planet in planets:
-    pygame.draw.circle(background, planet[3], (planet[0], planet[1]), planet[2])
+
+def create_background():
+    background = pygame.Surface((WIDTH, HEIGHT))
+    background.fill(BLACK)
+    nebulae = [create_nebula() for _ in range(3)]
+    stars = [create_star() for _ in range(200)]
+    planets = [create_planet() for _ in range(5)]
+    for nebula in nebulae:
+        pygame.draw.circle(background, nebula[3], (nebula[0], nebula[1]), nebula[2])
+    for star in stars:
+        pygame.draw.circle(background, WHITE, (star[0], star[1]), star[2])
+    for planet in planets:
+        pygame.draw.circle(background, planet[3], (planet[0], planet[1]), planet[2])
+    return background
+
+def blend_surfaces(surface1, surface2, alpha):
+    result = surface1.copy()
+    surface2.set_alpha(int(alpha * 255))
+    result.blit(surface2, (0, 0))
+    return result
+
+num_backgrounds = 5
+backgrounds = [create_background() for _ in range(num_backgrounds)]
+current_background_index = 0
+next_background_index = 1
+transition_progress = 0
+transition_speed = 0.002
 while running:
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
@@ -92,13 +108,27 @@ while running:
     keys = pygame.key.get_pressed()
     if keys[pygame.K_a] and player_angle > 0:
         player_angle -= player_speed
+        transition_progress -= transition_speed
     if keys[pygame.K_d] and player_angle < (len(spiral_points) - 1) * 0.1:
         player_angle += player_speed
+        transition_progress += transition_speed
+    if transition_progress >= 1:
+        current_background_index = next_background_index
+        next_background_index = (next_background_index + 1) % num_backgrounds
+        transition_progress = 0
+    elif transition_progress < 0:
+        next_background_index = current_background_index
+        current_background_index = (current_background_index - 1) % num_backgrounds
+        transition_progress = 1 + transition_progress
+    transition_progress = max(0, min(1, transition_progress))
     player_pos = get_player_position(player_angle)
     player_orientation = get_player_orientation(player_angle)
     current_scale = base_scale * zoom_factor
-    screen.fill(WHITE)
-    screen.blit(background, (0, 0))
+    current_bg = backgrounds[current_background_index]
+    next_bg = backgrounds[next_background_index]
+    blended_background = blend_surfaces(current_bg, next_bg, transition_progress)
+
+    screen.blit(blended_background, (0, 0))
     if len(spiral_points) > 1:
         adjusted_points = []
         for point in spiral_points:
