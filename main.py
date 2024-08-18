@@ -1,6 +1,7 @@
 import pygame
 import math
 import random
+import colorsys
 pygame.init()
 WIDTH, HEIGHT = (800, 600)
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
@@ -23,7 +24,6 @@ original_astronaut_sprites = [pygame.image.load(f'assets\\images\\astro\\astro-{
 meteorite_sprite = pygame.image.load('assets\\images\\meteorite.png')
 base_meteorite_scale = 0.5
 scaled_meteorite_sprite = pygame.transform.scale(meteorite_sprite, (int(meteorite_sprite.get_width() * base_meteorite_scale), int(meteorite_sprite.get_height() * base_meteorite_scale)))
-
 base_sprite_scale = 0.1
 astronaut_sprites = []
 current_sprite = 0
@@ -32,13 +32,15 @@ sprite_update_delay = 100
 facing_right = True
 a = 50
 b = 0.1
+rainbow_repetitions = 5
 
 class Meteorite:
+
     def __init__(self):
         self.x = WIDTH + random.randint(0, 200)
         self.y = random.randint(-200, 0)
         self.speed = random.uniform(2, 5)
-        self.angle = math.radians(random.uniform(150, 200))  # Angle towards bottom-left
+        self.angle = math.radians(random.uniform(150, 200))
 
     def move(self):
         self.x += self.speed * math.cos(self.angle)
@@ -46,16 +48,14 @@ class Meteorite:
 
     def is_off_screen(self):
         return self.x < -1000 or self.y > HEIGHT + 1000
-
 meteorites = []
 meteorite_spawn_timer = 0
-meteorite_spawn_interval = 2000  # Spawn a new meteorite every 2 seconds
+meteorite_spawn_interval = 2000
 
 def scale_meteorite_sprite(zoom):
     global scaled_meteorite_sprite
     current_scale = base_meteorite_scale * zoom
     scaled_meteorite_sprite = pygame.transform.scale(meteorite_sprite, (int(meteorite_sprite.get_width() * current_scale), int(meteorite_sprite.get_height() * current_scale)))
-
 
 def scale_sprites(zoom):
     global astronaut_sprites
@@ -76,6 +76,13 @@ def generate_spiral_points():
 generate_spiral_points()
 player_index = 0
 player_pos = spiral_points[player_index]
+
+def get_rainbow_color(t):
+    """
+    Generate a rainbow color based on a value t between 0 and 1.
+    """
+    r, g, b = colorsys.hsv_to_rgb(t, 1.0, 1.0)
+    return int(r * 255), int(g * 255), int(b * 255)
 
 def get_player_speed(index):
     return base_speed
@@ -147,16 +154,13 @@ while running:
     moving = False
     current_time = pygame.time.get_ticks()
     current_speed = get_player_speed(player_index)
-
     if current_time - meteorite_spawn_timer > meteorite_spawn_interval:
         meteorites.append(Meteorite())
         meteorite_spawn_timer = current_time
-
     for meteorite in meteorites[:]:
         meteorite.move()
         if meteorite.is_off_screen():
             meteorites.remove(meteorite)
-
     if keys[pygame.K_a] and player_index > 0:
         player_index = max(0, player_index - current_speed)
         player_pos = spiral_points[int(player_index)]
@@ -186,7 +190,7 @@ while running:
     screen.blit(blended_background, (0, 0))
     if len(spiral_points) > 1:
         adjusted_points = []
-        for point in spiral_points:
+        for i, point in enumerate(spiral_points):
             offset_x = point[0] - player_pos[0]
             offset_y = point[1] - player_pos[1]
             rotated_x = offset_x * math.cos(-player_orientation) - offset_y * math.sin(-player_orientation)
@@ -194,10 +198,16 @@ while running:
             screen_x = rotated_x * current_scale * base_scale + WIDTH // 2
             screen_y = rotated_y * current_scale * base_scale + HEIGHT // 2
             adjusted_points.append((screen_x, screen_y))
-        pygame.draw.lines(screen, YELLOW, False, adjusted_points, 2)
+        
+        for i in range(len(adjusted_points) - 1):
+            start_point = adjusted_points[i]
+            end_point = adjusted_points[i + 1]
+            t = (i / len(adjusted_points)) * rainbow_repetitions  # Multiply by rainbow_repetitions
+            t = t - int(t)  # This operation keeps t between 0 and 1
+            color = get_rainbow_color(t)
+            pygame.draw.line(screen, color, start_point, end_point, 2)
     player_screen_pos = (WIDTH // 2, HEIGHT // 2)
     if moving:
-        
         if current_time - sprite_update_time > sprite_update_delay:
             current_sprite = (current_sprite + 1) % 5
             sprite_update_time = current_time
@@ -212,7 +222,6 @@ while running:
     sprite_pos = (player_screen_pos[0], player_screen_pos[1] - sprite_offset_y)
     sprite_rect = sprite.get_rect(midbottom=sprite_pos)
     screen.blit(sprite, sprite_rect)
-
     for meteorite in meteorites:
         offset_x = meteorite.x - player_pos[0]
         offset_y = meteorite.y - player_pos[1]
@@ -220,11 +229,8 @@ while running:
         rotated_y = offset_x * math.sin(-player_orientation) + offset_y * math.cos(-player_orientation)
         screen_x = rotated_x * current_scale * base_scale + WIDTH // 2
         screen_y = rotated_y * current_scale * base_scale + HEIGHT // 2
-        #print(screen_x)    
-        #print(screen_y)
         meteorite_rect = scaled_meteorite_sprite.get_rect(center=(screen_x, screen_y))
         screen.blit(scaled_meteorite_sprite, meteorite_rect)
-
     if player_index == len(spiral_points) - 1:
         win_text = font.render("You've reached the end of the spiral!", True, WHITE)
         screen.blit(win_text, (WIDTH // 2 - win_text.get_width() // 2, HEIGHT // 2))
