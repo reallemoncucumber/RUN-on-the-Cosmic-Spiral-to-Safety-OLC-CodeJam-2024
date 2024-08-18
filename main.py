@@ -1,28 +1,30 @@
 import pygame
 import math
 import random
+
 pygame.init()
 WIDTH, HEIGHT = (800, 600)
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
-pygame.display.set_caption('run in spiral OLC CodeJam 2024')
+pygame.display.set_caption('Run in Spiral OLC CodeJam 2024')
+
 WHITE = (255, 255, 255)
 BLACK = (0, 0, 0)
 RED = (255, 0, 0)
 YELLOW = (255, 250, 205)
-player_radius = 20
-player_angle = 0
-player_speed = 0.5
-base_scale = 200
+
+player_speed = 1
+base_scale = 1
 zoom_factor = 1
 min_zoom = 0.25
 max_zoom = 2
+
 spiral_points = []
-spiral_growth = 0.05
-max_radius = math.sqrt((WIDTH / 2) ** 2 + (HEIGHT / 2) ** 2) * 0.1
+max_distance = math.sqrt((WIDTH / 2) ** 2 + (HEIGHT / 2) ** 2) * 0.5
+
 running = True
-current_angle = 0
 clock = pygame.time.Clock()
 font = pygame.font.Font(None, 36)
+
 astronaut_sprites = [pygame.image.load(f'assets\\images\\astro\\astro-{i}.png') for i in range(1, 6)]
 sprite_scale = 0.1
 astronaut_sprites = [pygame.transform.scale(sprite, (int(sprite.get_width() * sprite_scale), int(sprite.get_height() * sprite_scale))) for sprite in astronaut_sprites]
@@ -31,30 +33,30 @@ sprite_update_time = 0
 sprite_update_delay = 100
 facing_right = True
 
-def generate_spiral_point(angle):
-    radius = math.exp(angle * spiral_growth)
-    x = radius * math.cos(angle)
-    y = radius * math.sin(angle)
-    return [x, y]
-while True:
-    point = generate_spiral_point(current_angle)
-    if math.hypot(point[0], point[1]) > max_radius:
-        break
-    spiral_points.append(point)
-    current_angle += 0.01
+a = 50  # Controls the initial size of the spiral
+b = 0.1  # Controls how tightly the spiral is wound
 
-def get_player_position(angle):
-    index = int(angle / 0.1)
-    if index >= len(spiral_points):
-        return spiral_points[-1]
-    return spiral_points[index]
+def generate_spiral_points():
+    t = 0
+    while True:
+        r = a * math.exp(b * t)
+        x = r * math.cos(t)
+        y = r * math.sin(t)
+        if math.hypot(x, y) > max_distance:
+            break
+        spiral_points.append((x, y))
+        t += 0.05
 
-def get_player_orientation(angle):
-    index = int(angle / 0.1)
-    if index >= len(spiral_points) - 1:
+generate_spiral_points()
+
+player_index = 0
+player_pos = spiral_points[player_index]
+
+def get_player_orientation():
+    if player_index >= len(spiral_points) - 1:
         return 0
-    current_point = spiral_points[index]
-    next_point = spiral_points[index + 1]
+    current_point = spiral_points[player_index]
+    next_point = spiral_points[player_index + 1]
     dx = next_point[0] - current_point[0]
     dy = next_point[1] - current_point[1]
     return math.atan2(dy, dx)
@@ -98,12 +100,14 @@ def blend_surfaces(surface1, surface2, alpha):
     surface2.set_alpha(int(alpha * 255))
     result.blit(surface2, (0, 0))
     return result
+
 num_backgrounds = 5
 backgrounds = [create_background() for _ in range(num_backgrounds)]
 current_background_index = 0
 next_background_index = 1
 transition_progress = 0
 transition_speed = 0.002
+
 while running:
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
@@ -111,18 +115,22 @@ while running:
         elif event.type == pygame.MOUSEWHEEL:
             zoom_factor += event.y * 0.1
             zoom_factor = max(min_zoom, min(max_zoom, zoom_factor))
+
     keys = pygame.key.get_pressed()
     moving = False
-    if keys[pygame.K_a] and player_angle > 0:
-        player_angle -= player_speed
+    if keys[pygame.K_a] and player_index > 0:
+        player_index = max(0, player_index - player_speed)
+        player_pos = spiral_points[int(player_index)]
         transition_progress -= transition_speed
         moving = True
         facing_right = False
-    if keys[pygame.K_d] and player_angle < (len(spiral_points) - 1) * 0.1:
-        player_angle += player_speed
+    if keys[pygame.K_d] and player_index < len(spiral_points) - 1:
+        player_index = min(len(spiral_points) - 1, player_index + player_speed)
+        player_pos = spiral_points[int(player_index)]
         transition_progress += transition_speed
         moving = True
         facing_right = True
+
     if transition_progress >= 1:
         current_background_index = next_background_index
         next_background_index = (next_background_index + 1) % num_backgrounds
@@ -132,13 +140,15 @@ while running:
         current_background_index = (current_background_index - 1) % num_backgrounds
         transition_progress = 1 + transition_progress
     transition_progress = max(0, min(1, transition_progress))
-    player_pos = get_player_position(player_angle)
-    player_orientation = get_player_orientation(player_angle)
+
+    player_orientation = get_player_orientation()
     current_scale = base_scale * zoom_factor
+
     current_bg = backgrounds[current_background_index]
     next_bg = backgrounds[next_background_index]
     blended_background = blend_surfaces(current_bg, next_bg, transition_progress)
     screen.blit(blended_background, (0, 0))
+
     if len(spiral_points) > 1:
         adjusted_points = []
         for point in spiral_points:
@@ -146,11 +156,13 @@ while running:
             offset_y = point[1] - player_pos[1]
             rotated_x = offset_x * math.cos(-player_orientation) - offset_y * math.sin(-player_orientation)
             rotated_y = offset_x * math.sin(-player_orientation) + offset_y * math.cos(-player_orientation)
-            screen_x = rotated_x * current_scale + WIDTH // 2
-            screen_y = rotated_y * current_scale + HEIGHT // 2
+            screen_x = rotated_x * current_scale * base_scale + WIDTH // 2
+            screen_y = rotated_y * current_scale * base_scale + HEIGHT // 2
             adjusted_points.append((screen_x, screen_y))
         pygame.draw.lines(screen, YELLOW, False, adjusted_points, 2)
+
     player_screen_pos = (WIDTH // 2, HEIGHT // 2)
+
     if moving:
         current_time = pygame.time.get_ticks()
         if current_time - sprite_update_time > sprite_update_delay:
@@ -158,6 +170,7 @@ while running:
             sprite_update_time = current_time
     else:
         current_sprite = 0
+
     sprite = astronaut_sprites[current_sprite]
     if not facing_right:
         sprite = pygame.transform.flip(sprite, True, False)
@@ -165,9 +178,12 @@ while running:
     sprite_pos = (player_screen_pos[0], player_screen_pos[1] - sprite_offset_y)
     sprite_rect = sprite.get_rect(midbottom=sprite_pos)
     screen.blit(sprite, sprite_rect)
-    if player_angle >= (len(spiral_points) - 1) * 0.1:
+
+    if player_index == len(spiral_points) - 1:
         win_text = font.render("You've reached the end of the spiral!", True, WHITE)
         screen.blit(win_text, (WIDTH // 2 - win_text.get_width() // 2, HEIGHT // 2))
+
     pygame.display.flip()
     clock.tick(60)
+
 pygame.quit()
