@@ -17,7 +17,6 @@ min_zoom = 0.25
 max_zoom = 2
 spiral_points = []
 max_distance = math.sqrt((WIDTH / 2) ** 2 + (HEIGHT / 2) ** 2) * 10
-running = True
 clock = pygame.time.Clock()
 font = pygame.font.Font(None, 36)
 original_astronaut_sprites = [pygame.image.load(f'assets\\images\\astro\\astro-{i}.png') for i in range(1, 6)]
@@ -41,6 +40,7 @@ class Meteorite:
         self.y = random.randint(-200, 0)
         self.speed = random.uniform(2, 5)
         self.angle = math.radians(random.uniform(150, 200))
+        self.mask = pygame.mask.from_surface(scaled_meteorite_sprite)
 
     def move(self):
         self.x += self.speed * math.cos(self.angle)
@@ -56,6 +56,8 @@ def scale_meteorite_sprite(zoom):
     global scaled_meteorite_sprite
     current_scale = base_meteorite_scale * zoom
     scaled_meteorite_sprite = pygame.transform.scale(meteorite_sprite, (int(meteorite_sprite.get_width() * current_scale), int(meteorite_sprite.get_height() * current_scale)))
+    for meteorite in meteorites:
+        meteorite.mask = pygame.mask.from_surface(scaled_meteorite_sprite)
 
 def scale_sprites(zoom):
     global astronaut_sprites
@@ -78,11 +80,8 @@ player_index = 0
 player_pos = spiral_points[player_index]
 
 def get_rainbow_color(t):
-    """
-    Generate a rainbow color based on a value t between 0 and 1.
-    """
     r, g, b = colorsys.hsv_to_rgb(t, 1.0, 1.0)
-    return int(r * 255), int(g * 255), int(b * 255)
+    return (int(r * 255), int(g * 255), int(b * 255))
 
 def get_player_speed(index):
     return base_speed
@@ -141,6 +140,22 @@ current_background_index = 0
 next_background_index = 1
 transition_progress = 0
 transition_speed = 0.002
+
+def reset_game():
+    global player_index, player_pos, meteorites, current_background_index, next_background_index, transition_progress
+    player_index = 0
+    player_pos = spiral_points[player_index]
+    meteorites.clear()
+    current_background_index = 0
+    next_background_index = 1
+    transition_progress = 0
+
+def check_collision(player_rect, player_mask, meteorite_rect, meteorite_mask):
+    offset = (meteorite_rect.x - player_rect.x, meteorite_rect.y - player_rect.y)
+    return player_mask.overlap(meteorite_mask, offset)
+running = True
+game_over = False
+try_again_button = pygame.Rect(WIDTH // 2 - 100, HEIGHT // 2 + 50, 200, 50)
 while running:
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
@@ -150,38 +165,43 @@ while running:
             zoom_factor = max(min_zoom, min(max_zoom, zoom_factor))
             scale_sprites(zoom_factor)
             scale_meteorite_sprite(zoom_factor)
-    keys = pygame.key.get_pressed()
-    moving = False
-    current_time = pygame.time.get_ticks()
-    current_speed = get_player_speed(player_index)
-    if current_time - meteorite_spawn_timer > meteorite_spawn_interval:
-        meteorites.append(Meteorite())
-        meteorite_spawn_timer = current_time
-    for meteorite in meteorites[:]:
-        meteorite.move()
-        if meteorite.is_off_screen():
-            meteorites.remove(meteorite)
-    if keys[pygame.K_a] and player_index > 0:
-        player_index = max(0, player_index - current_speed)
-        player_pos = spiral_points[int(player_index)]
-        transition_progress -= transition_speed * current_speed
-        moving = True
-        facing_right = False
-    if keys[pygame.K_d] and player_index < len(spiral_points) - 1:
-        player_index = min(len(spiral_points) - 1, player_index + current_speed)
-        player_pos = spiral_points[int(player_index)]
-        transition_progress += transition_speed * current_speed
-        moving = True
-        facing_right = True
-    if transition_progress >= 1:
-        current_background_index = next_background_index
-        next_background_index = (next_background_index + 1) % num_backgrounds
-        transition_progress = 0
-    elif transition_progress < 0:
-        next_background_index = current_background_index
-        current_background_index = (current_background_index - 1) % num_backgrounds
-        transition_progress = 1 + transition_progress
-    transition_progress = max(0, min(1, transition_progress))
+        elif event.type == pygame.MOUSEBUTTONDOWN and game_over:
+            if try_again_button.collidepoint(event.pos):
+                game_over = False
+                reset_game()
+    if not game_over:
+        keys = pygame.key.get_pressed()
+        moving = False
+        current_time = pygame.time.get_ticks()
+        current_speed = get_player_speed(player_index)
+        if current_time - meteorite_spawn_timer > meteorite_spawn_interval:
+            meteorites.append(Meteorite())
+            meteorite_spawn_timer = current_time
+        for meteorite in meteorites[:]:
+            meteorite.move()
+            if meteorite.is_off_screen():
+                meteorites.remove(meteorite)
+        if keys[pygame.K_a] and player_index > 0:
+            player_index = max(0, player_index - current_speed)
+            player_pos = spiral_points[int(player_index)]
+            transition_progress -= transition_speed * current_speed
+            moving = True
+            facing_right = False
+        if keys[pygame.K_d] and player_index < len(spiral_points) - 1:
+            player_index = min(len(spiral_points) - 1, player_index + current_speed)
+            player_pos = spiral_points[int(player_index)]
+            transition_progress += transition_speed * current_speed
+            moving = True
+            facing_right = True
+        if transition_progress >= 1:
+            current_background_index = next_background_index
+            next_background_index = (next_background_index + 1) % num_backgrounds
+            transition_progress = 0
+        elif transition_progress < 0:
+            next_background_index = current_background_index
+            current_background_index = (current_background_index - 1) % num_backgrounds
+            transition_progress = 1 + transition_progress
+        transition_progress = max(0, min(1, transition_progress))
     player_orientation = get_player_orientation()
     current_scale = base_scale * zoom_factor
     current_bg = backgrounds[current_background_index]
@@ -198,12 +218,11 @@ while running:
             screen_x = rotated_x * current_scale * base_scale + WIDTH // 2
             screen_y = rotated_y * current_scale * base_scale + HEIGHT // 2
             adjusted_points.append((screen_x, screen_y))
-        
         for i in range(len(adjusted_points) - 1):
             start_point = adjusted_points[i]
             end_point = adjusted_points[i + 1]
-            t = (i / len(adjusted_points)) * rainbow_repetitions  # Multiply by rainbow_repetitions
-            t = t - int(t)  # This operation keeps t between 0 and 1
+            t = i / len(adjusted_points) * rainbow_repetitions
+            t = t - int(t)
             color = get_rainbow_color(t)
             pygame.draw.line(screen, color, start_point, end_point, 2)
     player_screen_pos = (WIDTH // 2, HEIGHT // 2)
@@ -222,6 +241,7 @@ while running:
     sprite_pos = (player_screen_pos[0], player_screen_pos[1] - sprite_offset_y)
     sprite_rect = sprite.get_rect(midbottom=sprite_pos)
     screen.blit(sprite, sprite_rect)
+    player_mask = pygame.mask.from_surface(sprite)
     for meteorite in meteorites:
         offset_x = meteorite.x - player_pos[0]
         offset_y = meteorite.y - player_pos[1]
@@ -231,9 +251,17 @@ while running:
         screen_y = rotated_y * current_scale * base_scale + HEIGHT // 2
         meteorite_rect = scaled_meteorite_sprite.get_rect(center=(screen_x, screen_y))
         screen.blit(scaled_meteorite_sprite, meteorite_rect)
+        if check_collision(sprite_rect, player_mask, meteorite_rect, meteorite.mask):
+            game_over = True
     if player_index == len(spiral_points) - 1:
         win_text = font.render("You've reached the end of the spiral!", True, WHITE)
         screen.blit(win_text, (WIDTH // 2 - win_text.get_width() // 2, HEIGHT // 2))
+    if game_over:
+        game_over_text = font.render('Game Over!', True, RED)
+        screen.blit(game_over_text, (WIDTH // 2 - game_over_text.get_width() // 2, HEIGHT // 2 - 50))
+        pygame.draw.rect(screen, YELLOW, try_again_button)
+        try_again_text = font.render('Try Again', True, BLACK)
+        screen.blit(try_again_text, (try_again_button.x + try_again_button.width // 2 - try_again_text.get_width() // 2, try_again_button.y + try_again_button.height // 2 - try_again_text.get_height() // 2))
     pygame.display.flip()
     clock.tick(60)
 pygame.quit()
