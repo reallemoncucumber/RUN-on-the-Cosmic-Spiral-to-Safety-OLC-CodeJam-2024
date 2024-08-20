@@ -15,9 +15,8 @@ GREEN = (144, 238, 144)
 base_speed = 1
 base_scale = 1
 zoom_factor = 1
-min_zoom = 0.25
-max_zoom = 2
-spiral_points = []
+min_zoom = 1
+max_zoom = 1
 max_distance = math.sqrt((WIDTH / 2) ** 2 + (HEIGHT / 2) ** 2) * 10
 clock = pygame.time.Clock()
 font = pygame.font.Font(None, 36)
@@ -48,7 +47,12 @@ background_change_timer = 0
 background_change_interval = 2000
 start_screen_sprite = pygame.image.load('assets\\images\\start_screen.png')
 font_size = 52
+stamina_font_size = 28
 font = pygame.font.Font(None, font_size)
+font_hud = pygame.font.Font(None, stamina_font_size)
+
+def check_win_condition(player_rect, shuttle_rect):
+    return player_rect.colliderect(shuttle_rect)
 
 def create_pixelated_text(text, font, font_size):
     temp_font = pygame.font.Font(None, font_size * 8)
@@ -79,21 +83,23 @@ def start_menu_logic(screen, pixelated_text, button, time, bounce_speed, bounce_
 class Meteorite:
 
     def __init__(self):
-        self.x = 2 * WIDTH
-        self.y = -HEIGHT
+        self.offset_factor = 6
+        self.x = random.choice([self.offset_factor * WIDTH, -self.offset_factor * WIDTH])
+        self.y = random.choice([self.offset_factor * HEIGHT, -self.offset_factor * HEIGHT])
+        self.scale_factor = random.uniform(0.2, 2)
         self.speed = random.uniform(2, 5)
         self.angle = math.radians(random.uniform(0, 360))
-        self.mask = pygame.mask.from_surface(scaled_meteorite_sprite)
+        self.mask = pygame.mask.from_surface(pygame.transform.scale(scaled_meteorite_sprite, (int(scaled_meteorite_sprite.get_width() * self.scale_factor), int(scaled_meteorite_sprite.get_height() * self.scale_factor))))
 
     def move(self):
         self.x += self.speed * math.cos(self.angle)
         self.y += self.speed * math.sin(self.angle)
 
     def is_off_screen(self):
-        return self.x < -3000 or self.y > 3000 or self.y < -3000 or (self.x > 3000)
+        return self.x < -self.offset_factor * WIDTH or self.y > self.offset_factor * HEIGHT or self.y < -self.offset_factor * HEIGHT or (self.x > self.offset_factor * WIDTH)
 meteorites = []
 meteorite_spawn_timer = 0
-meteorite_spawn_interval = 200
+meteorite_spawn_interval = 100
 
 def scale_meteorite_sprite(zoom):
     global scaled_meteorite_sprite
@@ -109,7 +115,14 @@ def scale_sprites(zoom):
 scale_sprites(zoom_factor)
 
 def generate_spiral_points():
+    from collections import defaultdict
+    initial_step = 0.01
+    max_step = 0.003
+    decay_factor = 0.999845
+    spiral_points = []
     t = 0
+    step = initial_step
+    d = defaultdict(int)
     while True:
         r = a * math.exp(b * t)
         x = r * math.cos(t)
@@ -117,9 +130,15 @@ def generate_spiral_points():
         if math.hypot(x, y) > max_distance:
             break
         spiral_points.append((x, y))
-        t += 0.01
-generate_spiral_points()
+        step *= decay_factor
+        step = max(step, max_step)
+        d[step] += 1
+        t += step
+    print(d)
+    print(len(spiral_points))
+    return spiral_points
 player_index = 0
+spiral_points = generate_spiral_points()
 player_pos = spiral_points[player_index]
 
 def get_rainbow_color(t):
@@ -127,9 +146,10 @@ def get_rainbow_color(t):
     return (int(r * 255), int(g * 255), int(b * 255))
 
 def get_player_speed(index):
+    if index >= len(spiral_points) - 100:
+        progress = index / len(spiral_points)
+        return base_speed / 3
     return base_speed
-    progress = index / len(spiral_points)
-    return base_speed * (1 - progress * 0.96)
 
 def get_player_orientation():
     if player_index >= len(spiral_points) - 1:
@@ -266,6 +286,28 @@ num_initial_cracks = 10
 cracks = [Crack(WIDTH // 2, HEIGHT // 2, random.uniform(0, 2 * math.pi)) for _ in range(num_initial_cracks)]
 screen_shake_duration = 0
 screen_shake_intensity = 10
+SPRINT_SPEED_MULTIPLIER = 3
+SPRINT_STAMINA_CONSUMPTION = 1
+SPRINT_STAMINA_REGENERATION = 0.1
+
+class Player:
+
+    def __init__(self):
+        self.stamina = 100.0
+        self.is_sprinting = False
+
+    def update(self, keys, current_speed):
+        self.stamina = min(100.0, self.stamina + SPRINT_STAMINA_REGENERATION)
+        if keys[pygame.K_w] and (keys[pygame.K_d] or keys[pygame.K_a]):
+            self.is_sprinting = True
+            self.stamina = max(0.0, self.stamina - SPRINT_STAMINA_CONSUMPTION)
+        else:
+            self.is_sprinting = False
+        if self.is_sprinting and self.stamina > 0:
+            return current_speed * SPRINT_SPEED_MULTIPLIER
+        else:
+            return current_speed
+player = Player()
 
 def apply_screen_shake(surface):
     global screen_shake_duration
@@ -344,7 +386,9 @@ def run_game():
             keys = pygame.key.get_pressed()
             moving = False
             current_time = pygame.time.get_ticks()
+            keys = pygame.key.get_pressed()
             current_speed = get_player_speed(player_index)
+            player_speed = player.update(keys, current_speed)
             if current_time - meteorite_spawn_timer > meteorite_spawn_interval:
                 meteorites.append(Meteorite())
                 meteorite_spawn_timer = current_time
@@ -354,15 +398,15 @@ def run_game():
                     meteorites.remove(meteorite)
             if not game_won:
                 if keys[pygame.K_a] and player_index > 0:
-                    player_index = max(0, player_index - current_speed)
+                    player_index = max(0, player_index - player_speed)
                     player_pos = spiral_points[int(player_index)]
-                    transition_progress -= transition_speed * current_speed
+                    transition_progress -= transition_speed * player_speed
                     moving = True
                     facing_right = False
                 if keys[pygame.K_d] and player_index < len(spiral_points) - 1:
-                    player_index = min(len(spiral_points) - 1, player_index + current_speed)
+                    player_index = min(len(spiral_points) - 1, player_index + player_speed)
                     player_pos = spiral_points[int(player_index)]
-                    transition_progress += transition_speed * current_speed
+                    transition_progress += transition_speed * player_speed
                     moving = True
                     facing_right = True
             if transition_progress >= 1:
@@ -432,8 +476,8 @@ def run_game():
                     rotated_y = offset_x * math.sin(-player_orientation) + offset_y * math.cos(-player_orientation)
                     screen_x = rotated_x * current_scale * base_scale + WIDTH // 2
                     screen_y = rotated_y * current_scale * base_scale + HEIGHT // 2
-                    meteorite_rect = scaled_meteorite_sprite.get_rect(center=(screen_x, screen_y))
-                    game_surface.blit(scaled_meteorite_sprite, meteorite_rect)
+                    meteorite_rect = pygame.transform.scale(scaled_meteorite_sprite, (int(scaled_meteorite_sprite.get_width() * meteorite.scale_factor), int(scaled_meteorite_sprite.get_height() * meteorite.scale_factor))).get_rect(center=(screen_x, screen_y))
+                    game_surface.blit(pygame.transform.scale(scaled_meteorite_sprite, (int(scaled_meteorite_sprite.get_width() * meteorite.scale_factor), int(scaled_meteorite_sprite.get_height() * meteorite.scale_factor))), meteorite_rect)
                     if sprite_rect is not None and check_collision(sprite_rect, player_mask, meteorite_rect, meteorite.mask):
                         game_over = True
             if game_over:
@@ -462,8 +506,9 @@ def run_game():
             shuttle_y = rotated_y * current_scale * base_scale + HEIGHT // 2
             shuttle_rect = scaled_shuttle_sprite.get_rect(center=(shuttle_x, shuttle_y))
             game_surface.blit(scaled_shuttle_sprite, shuttle_rect)
-            if player_index >= len(spiral_points) - 1:
+            if player_index >= len(spiral_points) - 6:
                 game_won = True
+                player_pos = spiral_points[len(spiral_points) - 1]
                 win_text = font.render('You won!', True, GREEN)
                 game_surface.blit(win_text, (WIDTH // 2 - win_text.get_width() // 2, HEIGHT // 4))
             if game_over:
@@ -478,6 +523,24 @@ def run_game():
                     pygame.draw.rect(game_surface, YELLOW, try_again_button)
                     try_again_text = font.render('Try Again', True, BLACK)
                     game_surface.blit(try_again_text, (try_again_button.x + try_again_button.width // 2 - try_again_text.get_width() // 2, try_again_button.y + try_again_button.height // 2 - try_again_text.get_height() // 2))
+            stamina_bar_width = 200
+            stamina_bar_height = 20
+            stamina_bar_x = WIDTH - stamina_bar_width - 20
+            stamina_bar_y = HEIGHT - stamina_bar_height - 20
+            stamina_bar_rect = pygame.Rect(stamina_bar_x, stamina_bar_y, stamina_bar_width, stamina_bar_height)
+            stamina_percent = player.stamina / 100.0
+            stamina_bar_color = (0, 255, 0)
+            stamina_bar_active_width = int(stamina_bar_width * stamina_percent)
+            stamina_bar_active_rect = pygame.Rect(stamina_bar_x, stamina_bar_y, stamina_bar_active_width, stamina_bar_height)
+            pygame.draw.rect(game_surface, (128, 128, 128), stamina_bar_rect)
+            pygame.draw.rect(game_surface, stamina_bar_color, stamina_bar_active_rect)
+            pygame.draw.rect(game_surface, (255, 255, 255), stamina_bar_rect, 2)
+            stamina_text = font_hud.render(f'{int(player.stamina)}%', True, (0, 0, 0))
+            stamina_text_rect = stamina_text.get_rect(center=(stamina_bar_x + stamina_bar_width // 2, stamina_bar_y + stamina_bar_height // 2))
+            game_surface.blit(stamina_text, stamina_text_rect)
+            progress_text = font_hud.render(f'Progress: {int(player_index / (len(spiral_points) - 1) * 100)}%', True, (255, 255, 255))
+            progress_text_rect = progress_text.get_rect(topright=(WIDTH - 20, 20))
+            game_surface.blit(progress_text, progress_text_rect)
             apply_screen_shake(game_surface)
         pygame.display.flip()
         clock.tick(60)
