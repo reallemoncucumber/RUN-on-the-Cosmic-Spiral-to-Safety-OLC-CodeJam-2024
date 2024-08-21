@@ -3,7 +3,18 @@ import pygame
 import math
 import random
 import colorsys
+import sys
+
+if sys.platform == "emscripten":
+    platform.window.canvas.style.imageRendering = "pixelated"
+
+pygame.mixer.pre_init(44100, 16, 2, 4096)
 pygame.init()
+
+pygame.mixer.music.load("assets/sounds/soundtrack.ogg")
+pygame.mixer.Channel(0).play(pygame.mixer.Sound("assets/sounds/soundtrack.ogg"), -1)
+pygame.mixer.Channel(0).set_volume(0.3)
+
 WIDTH, HEIGHT = (800, 600)
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
 pygame.display.set_caption('Run in Spiral OLC CodeJam 2024')
@@ -350,11 +361,7 @@ game_over = False
 try_again_button = pygame.Rect(WIDTH // 2 - 100, HEIGHT // 2 + 50, 200, 50)
 sprite_rect = None
 
-async def run_game():
-    pygame.mixer.init()  # Initialize the mixer module
-    theme_song = pygame.mixer.Sound("assets/sounds/soundtrack.ogg")
-    theme_song.set_volume(0.3)  # Set the volume to 30%
-    theme_song.play(-1) 
+async def run_game():    
     global player_index, player_pos, meteorites, current_background_index, next_background_index, transition_progress, game_over_rotation, game_over_scale, screen_shake_duration, running, game_over, game_won, zoom_factor
     global moving, facing_right, meteorite_spawn_timer, sprite_rect, sprite_update_time, background_change_timer, sprite
     player_index = 0

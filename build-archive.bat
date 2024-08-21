@@ -1,1 +1,1 @@
-python -m pygbag --archive --PYBUILD 3.12 --ume_block 0 .
+python -m pygbag --archive --PYBUILD 3.12 --ume_block 0 --template noctx.tmpl .
