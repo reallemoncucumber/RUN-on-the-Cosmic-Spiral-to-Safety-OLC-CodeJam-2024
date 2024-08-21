@@ -1,3 +1,4 @@
+import asyncio
 import pygame
 import math
 import random
@@ -20,9 +21,9 @@ max_zoom = 1
 max_distance = math.sqrt((WIDTH / 2) ** 2 + (HEIGHT / 2) ** 2) * 10
 clock = pygame.time.Clock()
 font = pygame.font.Font(None, 36)
-original_astronaut_sprites = [pygame.image.load(f'assets\\images\\astro\\astro-{i}.png') for i in range(1, 6)]
-meteorite_sprite = pygame.image.load('assets\\images\\meteorite.png')
-space_shuttle_sprite = pygame.image.load('assets\\images\\space_shuttle.png')
+original_astronaut_sprites = [pygame.image.load(f'assets/images/astro/astro-{i}.png') for i in range(1, 6)]
+meteorite_sprite = pygame.image.load('assets/images/meteorite.png')
+space_shuttle_sprite = pygame.image.load('assets/images/space_shuttle.png')
 base_shuttle_scale = 0.2
 base_meteorite_scale = 0.2
 scaled_meteorite_sprite = pygame.transform.scale(meteorite_sprite, (int(meteorite_sprite.get_width() * base_meteorite_scale), int(meteorite_sprite.get_height() * base_meteorite_scale)))
@@ -45,7 +46,7 @@ star_speed = 1
 game_won = False
 background_change_timer = 0
 background_change_interval = 2000
-start_screen_sprite = pygame.image.load('assets\\images\\start_screen.png')
+start_screen_sprite = pygame.image.load('assets/images/start_screen.png')
 font_size = 52
 stamina_font_size = 28
 font = pygame.font.Font(None, font_size)
@@ -83,7 +84,13 @@ def start_menu_logic(screen, pixelated_text, button, time, bounce_speed, bounce_
 class Meteorite:
 
     def __init__(self):
-        self.offset_factor = 6
+        if pygame.time.get_ticks() <= 10000:
+            self.offset_factor = 1.5
+        elif pygame.time.get_ticks() <= 60000:
+            self.offset_factor = 3
+        else:
+            self.offset_factor = 6
+            
         self.x = random.choice([self.offset_factor * WIDTH, -self.offset_factor * WIDTH])
         self.y = random.choice([self.offset_factor * HEIGHT, -self.offset_factor * HEIGHT])
         self.scale_factor = random.uniform(0.2, 2)
@@ -134,8 +141,8 @@ def generate_spiral_points():
         step = max(step, max_step)
         d[step] += 1
         t += step
-    print(d)
-    print(len(spiral_points))
+    #print(d)
+    #print(len(spiral_points))
     return spiral_points
 player_index = 0
 spiral_points = generate_spiral_points()
@@ -342,7 +349,7 @@ game_over = False
 try_again_button = pygame.Rect(WIDTH // 2 - 100, HEIGHT // 2 + 50, 200, 50)
 sprite_rect = None
 
-def run_game():
+async def run_game():
     global player_index, player_pos, meteorites, current_background_index, next_background_index, transition_progress, game_over_rotation, game_over_scale, screen_shake_duration, running, game_over, game_won, zoom_factor
     global moving, facing_right, meteorite_spawn_timer, sprite_rect, sprite_update_time, background_change_timer, sprite
     player_index = 0
@@ -478,8 +485,10 @@ def run_game():
                     screen_y = rotated_y * current_scale * base_scale + HEIGHT // 2
                     meteorite_rect = pygame.transform.scale(scaled_meteorite_sprite, (int(scaled_meteorite_sprite.get_width() * meteorite.scale_factor), int(scaled_meteorite_sprite.get_height() * meteorite.scale_factor))).get_rect(center=(screen_x, screen_y))
                     game_surface.blit(pygame.transform.scale(scaled_meteorite_sprite, (int(scaled_meteorite_sprite.get_width() * meteorite.scale_factor), int(scaled_meteorite_sprite.get_height() * meteorite.scale_factor))), meteorite_rect)
-                    if sprite_rect is not None and check_collision(sprite_rect, player_mask, meteorite_rect, meteorite.mask):
-                        game_over = True
+                    
+                    if sprite_rect is not None and sprite_rect.inflate(200, 200).colliderect(meteorite_rect):
+                        if sprite_rect is not None and check_collision(sprite_rect, player_mask, meteorite_rect, meteorite.mask):
+                            game_over = True
             if game_over:
                 current_sprite = 0
                 game_over_rotation += game_over_rotation_speed
@@ -523,27 +532,55 @@ def run_game():
                     pygame.draw.rect(game_surface, YELLOW, try_again_button)
                     try_again_text = font.render('Try Again', True, BLACK)
                     game_surface.blit(try_again_text, (try_again_button.x + try_again_button.width // 2 - try_again_text.get_width() // 2, try_again_button.y + try_again_button.height // 2 - try_again_text.get_height() // 2))
-            stamina_bar_width = 200
-            stamina_bar_height = 20
-            stamina_bar_x = WIDTH - stamina_bar_width - 20
-            stamina_bar_y = HEIGHT - stamina_bar_height - 20
-            stamina_bar_rect = pygame.Rect(stamina_bar_x, stamina_bar_y, stamina_bar_width, stamina_bar_height)
-            stamina_percent = player.stamina / 100.0
-            stamina_bar_color = (0, 255, 0)
-            stamina_bar_active_width = int(stamina_bar_width * stamina_percent)
-            stamina_bar_active_rect = pygame.Rect(stamina_bar_x, stamina_bar_y, stamina_bar_active_width, stamina_bar_height)
-            pygame.draw.rect(game_surface, (128, 128, 128), stamina_bar_rect)
-            pygame.draw.rect(game_surface, stamina_bar_color, stamina_bar_active_rect)
-            pygame.draw.rect(game_surface, (255, 255, 255), stamina_bar_rect, 2)
-            stamina_text = font_hud.render(f'{int(player.stamina)}%', True, (0, 0, 0))
-            stamina_text_rect = stamina_text.get_rect(center=(stamina_bar_x + stamina_bar_width // 2, stamina_bar_y + stamina_bar_height // 2))
-            game_surface.blit(stamina_text, stamina_text_rect)
-            progress_text = font_hud.render(f'Progress: {int(player_index / (len(spiral_points) - 1) * 100)}%', True, (255, 255, 255))
-            progress_text_rect = progress_text.get_rect(topright=(WIDTH - 20, 20))
-            game_surface.blit(progress_text, progress_text_rect)
+
+            if not game_won:                    
+                stamina_bar_width = 200
+                stamina_bar_height = 20
+                stamina_bar_x = WIDTH - stamina_bar_width - 20
+                stamina_bar_y = HEIGHT - stamina_bar_height - 20
+                stamina_bar_rect = pygame.Rect(stamina_bar_x, stamina_bar_y, stamina_bar_width, stamina_bar_height)
+                stamina_percent = player.stamina / 100.0
+                stamina_bar_color = (0, 255, 0)
+                stamina_bar_active_width = int(stamina_bar_width * stamina_percent)
+                stamina_bar_active_rect = pygame.Rect(stamina_bar_x, stamina_bar_y, stamina_bar_active_width, stamina_bar_height)
+                pygame.draw.rect(game_surface, (128, 128, 128), stamina_bar_rect)
+                pygame.draw.rect(game_surface, stamina_bar_color, stamina_bar_active_rect)
+                pygame.draw.rect(game_surface, (255, 255, 255), stamina_bar_rect, 2)
+
+                stamina_text = font_hud.render('Stamina', True, (255, 255, 255))
+                stamina_text_rect = pygame.Rect(stamina_bar_x, stamina_bar_y - 30, stamina_bar_active_width, stamina_bar_height)
+                game_surface.blit(stamina_text, stamina_text_rect)
+
+                stamina_text = font_hud.render(f'{int(player.stamina)}%', True, (0, 0, 0))
+                stamina_text_rect = stamina_text.get_rect(center=(stamina_bar_x + stamina_bar_width // 2, stamina_bar_y + stamina_bar_height // 2))
+                game_surface.blit(stamina_text, stamina_text_rect)
+                progress_text = font_hud.render(f'Progress: {int(player_index / (len(spiral_points) - 1) * 100)}%', True, (255, 255, 255))
+                progress_text_rect = progress_text.get_rect(topright=(WIDTH - 20, 20))
+                game_surface.blit(progress_text, progress_text_rect)
+
+                controls_text = [
+                    "Controls:",
+                    "A/D (move left/right)",
+                    "W (sprint)"
+                ]
+                controls_text_color = (255, 255, 255)
+                controls_text_rect_height = len(controls_text) * 30
+                controls_text_rect = pygame.Rect(20, HEIGHT - controls_text_rect_height - 20, 300, controls_text_rect_height)
+                controls_text_surface = pygame.Surface((controls_text_rect.width, controls_text_rect.height), pygame.SRCALPHA)
+                controls_text_surface.fill((64, 64, 64, 0))  
+                game_surface.blit(controls_text_surface, controls_text_rect)
+
+                for i, line in enumerate(controls_text):
+                    text_surface = font_hud.render(line, True, controls_text_color)
+                    text_rect = text_surface.get_rect(topleft=(controls_text_rect.x + 10, controls_text_rect.y + i * 30))
+                    game_surface.blit(text_surface, text_rect)
+
             apply_screen_shake(game_surface)
+        
         pygame.display.flip()
+        await asyncio.sleep(0)
         clock.tick(60)
     pygame.quit()
-if __name__ == '__main__':
-    run_game()
+
+
+asyncio.run(run_game())
