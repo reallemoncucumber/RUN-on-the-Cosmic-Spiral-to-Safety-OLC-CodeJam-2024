@@ -328,7 +328,7 @@ def apply_screen_shake(surface):
         screen.blit(surface, (0, 0))
 
 def reset_game():
-    global player_index, player_pos, meteorites, current_background_index, next_background_index, transition_progress, game_over_rotation, game_over_scale, screen_shake_duration, game_over
+    global player_index, player_pos, meteorites, current_background_index, next_background_index, transition_progress, game_over_rotation, game_over_scale, screen_shake_duration, game_over, player
     player_index = 0
     player_pos = spiral_points[player_index]
     meteorites.clear()
@@ -339,6 +339,7 @@ def reset_game():
     game_over_scale = 1
     screen_shake_duration = 0
     game_over = False
+    player.stamina = 100
 
 def check_collision(player_rect, player_mask, meteorite_rect, meteorite_mask):
     offset = (meteorite_rect.x - player_rect.x, meteorite_rect.y - player_rect.y)
@@ -350,6 +351,10 @@ try_again_button = pygame.Rect(WIDTH // 2 - 100, HEIGHT // 2 + 50, 200, 50)
 sprite_rect = None
 
 async def run_game():
+    pygame.mixer.init()  # Initialize the mixer module
+    theme_song = pygame.mixer.Sound("assets/sounds/soundtrack.ogg")
+    theme_song.set_volume(0.3)  # Set the volume to 30%
+    theme_song.play(-1) 
     global player_index, player_pos, meteorites, current_background_index, next_background_index, transition_progress, game_over_rotation, game_over_scale, screen_shake_duration, running, game_over, game_won, zoom_factor
     global moving, facing_right, meteorite_spawn_timer, sprite_rect, sprite_update_time, background_change_timer, sprite
     player_index = 0
