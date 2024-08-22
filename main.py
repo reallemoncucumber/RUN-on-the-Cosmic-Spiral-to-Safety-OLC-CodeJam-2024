@@ -13,7 +13,7 @@ pygame.mixer.music.play(-1)
 pygame.mixer.music.set_volume(0.3)
 WIDTH, HEIGHT = (800, 600)
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
-pygame.display.set_caption('Run in Spiral OLC CodeJam 2024')
+pygame.display.set_caption('RUN on the Cosmic Spiral to Safety! OLC CodeJam 2024')
 WHITE = (255, 255, 255)
 BLACK = (0, 0, 0)
 RED = (255, 0, 0)
@@ -26,7 +26,6 @@ zoom_factor = 1
 min_zoom = 1
 max_zoom = 1
 max_distance = math.sqrt((WIDTH / 2) ** 2 + (HEIGHT / 2) ** 2) * 10
-clock = pygame.time.Clock()
 font = pygame.font.Font(None, 36)
 original_astronaut_sprites = [pygame.image.load(f'assets/images/astro/astro-{i}.png') for i in range(1, 6)]
 meteorite_sprite = pygame.image.load('assets/images/meteorite.png')
@@ -87,11 +86,6 @@ def create_button(text, font, width, height, pos, color, hover_color):
     text_surf = font.render(text, True, (255, 255, 255))
     text_rect = text_surf.get_rect(center=button_rect.center)
     return {'surface': button_surface, 'rect': button_rect, 'text': text_surf, 'text_rect': text_rect, 'color': color, 'hover_color': hover_color}
-
-def circles_intersect(x1, y1, r1, x2, y2, r2):
-    """Check if two circles intersect."""
-    distance = math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2)
-    return distance <= r1 + r2
 
 class MeteoriteSquare:
 
@@ -668,7 +662,7 @@ async def run_game():
                 stamina_text = font_hud.render('Stamina', True, (255, 255, 255))
                 stamina_text_rect = pygame.Rect(stamina_bar_x, stamina_bar_y - 30, stamina_bar_active_width, stamina_bar_height)
                 game_surface.blit(stamina_text, stamina_text_rect)
-                charge_text = font_hud.render(f'Repellant Charges: {player.repulsion_charges}', True, (255, 255, 255))
+                charge_text = font_hud.render(f'Repellent Charges: {player.repulsion_charges}', True, (255, 255, 255))
                 charge_text_rect = tamina_text_rect = pygame.Rect(stamina_bar_x, stamina_bar_y - 60, stamina_bar_active_width, stamina_bar_height)
                 game_surface.blit(charge_text, charge_text_rect)
                 stamina_text = font_hud.render(f'{int(player.stamina)}%', True, (0, 0, 0))
@@ -677,7 +671,7 @@ async def run_game():
                 progress_text = font_hud.render(f'Progress: {int(player_index / (len(spiral_points) - 1) * 100)}%', True, (255, 255, 255))
                 progress_text_rect = progress_text.get_rect(topright=(WIDTH - 20, 20))
                 game_surface.blit(progress_text, progress_text_rect)
-                controls_text = ['Controls:', 'A/D (move left/right)', 'W (sprint)', 'S (meteorite repellant)']
+                controls_text = ['Controls:', 'A/D (move left/right)', 'W (sprint)', 'S (meteorite repellent)']
                 controls_text_color = (255, 255, 255)
                 controls_text_rect_height = len(controls_text) * 30
                 controls_text_rect = pygame.Rect(20, HEIGHT - controls_text_rect_height - 20, 300, controls_text_rect_height)
